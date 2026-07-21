@@ -1,0 +1,44 @@
+name: Daily photo post
+
+on:
+  schedule:
+    # Runs once a day at 15:00 UTC (~24h cadence). Edit this to taste.
+    - cron: "0 15 * * *"
+  workflow_dispatch: {}  # lets you trigger it manually from the Actions tab
+
+permissions:
+  contents: write  # needed so the workflow can commit the inbox -> posted move
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure git identity
+        run: |
+          git config user.name "photo-poster-bot"
+          git config user.email "actions@users.noreply.github.com"
+
+      - name: Post next photo
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BUFFER_API_KEY: ${{ secrets.BUFFER_API_KEY }}
+          BUFFER_CHANNEL_IDS: ${{ secrets.BUFFER_CHANNEL_IDS }}
+        run: python post_photo.py
+
+      - name: Commit inbox -> posted move
+        run: |
+          if ! git diff --cached --quiet; then
+            git commit -m "Post: move published image to posted/"
+            git push
+          else
+            echo "Nothing to commit."
+          fi
